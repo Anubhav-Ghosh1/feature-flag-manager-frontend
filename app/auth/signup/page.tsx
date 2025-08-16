@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import Button from "../../../components/Buttons/Button";
 import axios from "axios";
 import "../../Utils/animate-gradient.css";
+import { toast } from "react-hot-toast";
 import { API_BASE_URL } from "../../../components/CommonUtils/api";
 import { useRouter } from "next/navigation";
 
@@ -10,7 +11,6 @@ const Signup = () => {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -18,22 +18,25 @@ const Signup = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
     setLoading(true);
+    const toastId = toast.loading("Loading....");
     try {
       const res = await axios.post(
         `${API_BASE_URL}/users/signup`,
         { username, email, password },
         { withCredentials: true }
       );
-      // TODO: handle signup success (e.g., redirect, set user context)
+
+      if (res.data.success == true) {
+        toast.success("Signup successful");
+        router.push("/auth/login");
+      }
       setLoading(false);
     } catch (err: any) {
       setError(err?.response?.data?.message || "Signup failed");
       setLoading(false);
+    } finally {
+      toast.dismiss(toastId);
     }
   };
 

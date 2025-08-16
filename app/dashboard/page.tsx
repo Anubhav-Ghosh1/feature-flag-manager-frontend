@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { CopyIcon } from "lucide-react";
 import { Trash2 } from "lucide-react";
 import { PencilIcon } from "lucide-react";
-import toast from "react-hot-toast";
+import { LogOut } from "lucide-react";
+import { toast } from "react-hot-toast";
 import { API_BASE_URL } from "../../components/CommonUtils/api";
 
 const api = axios.create({
@@ -15,11 +16,12 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// ------- Types -------
 type Project = {
   _id: string;
   name: string;
   description?: string;
+  projectId?: string;
+  flags: Flag[];
   createdAt?: string;
   updatedAt?: string;
 };
@@ -32,7 +34,6 @@ type Flag = {
   isEnabled?: "true" | "false" | boolean;
 };
 
-// ------- Utils -------
 const handleAxiosError = (err: any) =>
   err?.response?.data?.message || err?.message || "Something went wrong";
 
@@ -42,21 +43,20 @@ const formatDate = (d?: string) => {
   return isNaN(date.getTime()) ? "" : date.toLocaleString();
 };
 
-// ------- Toast -------
-function Toast({
-  text,
+function ToastTrigger({
+  message,
   tone = "success",
+  onDone,
 }: {
-  text: string;
+  message?: string;
   tone?: "success" | "error";
+  onDone?: () => void;
 }) {
-  if (text) {
-    if (tone === "success") {
-      toast.success(text);
-    } else {
-      toast.error(text);
-    }
-  }
+  React.useEffect(() => {
+    if (!message) return;
+    (tone === "error" ? toast.error : toast.success)(message);
+    onDone?.();
+  }, [message, tone, onDone]);
   return null;
 }
 
@@ -92,7 +92,6 @@ function Modal({
   );
 }
 
-// ------- Create Project Panel -------
 function CreateProjectPanel({
   onCreated,
 }: {
@@ -101,7 +100,7 @@ function CreateProjectPanel({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
-  const [toast, setToast] = useState<{
+  const [toastInfo, setToast] = useState<{
     text: string;
     tone?: "success" | "error";
   } | null>(null);
@@ -117,9 +116,9 @@ function CreateProjectPanel({
       onCreated(res.data.data);
       setName("");
       setDescription("");
-      setToast({ text: "Project created" });
+      ToastTrigger({ message: "Project Created Successfully" });
     } catch (err: any) {
-      setToast({ text: handleAxiosError(err), tone: "error" });
+      ToastTrigger({ message: "Error while creating project", tone: "error" });
     } finally {
       setLoading(false);
       setTimeout(() => setToast(null), 2000);
@@ -155,12 +154,10 @@ function CreateProjectPanel({
           {loading ? "Creating..." : "Create"}
         </button>
       </form>
-      {toast && <Toast text={toast.text} tone={toast.tone} />}
     </div>
   );
 }
 
-// ------- Project Card -------
 function ProjectCard({
   project,
   onOpen,
@@ -168,6 +165,7 @@ function ProjectCard({
   project: Project;
   onOpen: (p: Project) => void;
 }) {
+  const { user } = useUser();
   return (
     <div
       className="bg-white/70 backdrop-blur border border-gray-200 rounded-xl p-4 shadow hover:shadow-md transition cursor-pointer"
@@ -175,27 +173,48 @@ function ProjectCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-gray-900 font-semibold">{project.name}</h3>
+          <div className="flex items-center gap-1">
+            <p className="font-semibold text-gray-900">Project Name: </p>
+            <p className="text-gray-700">{project.name}</p>
+          </div>
           {project.description && (
-            <p className="text-sm text-gray-700 mt-1 line-clamp-2">
-              {project.description}
-            </p>
+            <div className="flex items-center gap-1">
+              <p className="font-semibold text-gray-900">Description: </p>
+              <p className="text-sm text-gray-700">{project.description}</p>
+            </div>
+          )}
+          {project.projectId && (
+            <div className="flex items-center gap-1">
+              <span className="font-semibold text-gray-900">Project URL:</span>
+              <button
+                type="button"
+                title="Copy Project URL"
+                className="ml-1 p-1 rounded hover:bg-gray-200 cursor-pointer transition"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigator.clipboard.writeText(
+                    `${API_BASE_URL}/projects/getProject/${user.api_key}/${project.projectId}`
+                  );
+                  toast.success("Project URL copied to clipboard");
+                }}
+              >
+                <CopyIcon className="w-4 h-4" />
+              </button>
+            </div>
           )}
         </div>
-      </div>
-      <div className="mt-3 text-xs text-gray-600 flex gap-3">
-        {project.createdAt && (
-          <span>Created: {formatDate(project.createdAt)}</span>
-        )}
-        {project.updatedAt && (
-          <span>Updated: {formatDate(project.updatedAt)}</span>
-        )}
+        <div className="mt-3 text-xs text-gray-600 flex gap-3">
+          {project.flags && (
+            <div className="flex items-center justify-center w-5 h-5 bg-gray-100 border border-gray-200 rounded-full">
+              <span className="text-gray-900">{project.flags.length}</span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-// ------- Flags section inside modal -------
 function FlagsSection({ projectId }: { projectId: string }) {
   const [flags, setFlags] = useState<Flag[]>([]);
   const [loading, setLoading] = useState(true);
@@ -205,11 +224,6 @@ function FlagsSection({ projectId }: { projectId: string }) {
   const [enabled, setEnabled] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [editingFlag, setEditingFlag] = useState<Flag | null>(null);
-
-  const [toast, setToast] = useState<{
-    text: string;
-    tone?: "success" | "error";
-  } | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -241,11 +255,9 @@ function FlagsSection({ projectId }: { projectId: string }) {
       setDescription("");
       setEnvironment("development");
       setEnabled(true);
-      setToast({ text: "Flag created" });
+      ToastTrigger({ message: "Flag created successfully" });
     } catch (err: any) {
-      setToast({ text: handleAxiosError(err), tone: "error" });
-    } finally {
-      setTimeout(() => setToast(null), 1800);
+      ToastTrigger({ message: err, tone: "error" });
     }
   };
 
@@ -261,7 +273,6 @@ function FlagsSection({ projectId }: { projectId: string }) {
   const toggleFlag = async (flag: Flag) => {
     try {
       const newVal = !(flag.isEnabled === true || flag.isEnabled === "true");
-      // Adjust endpoint if yours differs
       await api.post(`/flags/toggleFlagState`, {
         flagId: flag._id,
       });
@@ -269,28 +280,26 @@ function FlagsSection({ projectId }: { projectId: string }) {
         prev.map((f) => (f._id === flag._id ? { ...f, isEnabled: newVal } : f))
       );
     } catch (err: any) {
-      setToast({ text: handleAxiosError(err), tone: "error" });
-      setTimeout(() => setToast(null), 1800);
+      ToastTrigger({ message: "Error while toggling flag state" });
     }
   };
 
   const deleteFlag = async (flag: Flag) => {
     if (!confirm(`Delete flag "${flag.name}"?`)) return;
     try {
-      // Adjust endpoint if yours differs
       await api.delete(`/flags/deleteFlag/${flag._id}`);
       setFlags((prev) => prev.filter((f) => f._id !== flag._id));
-      setToast({ text: "Flag deleted" });
+      ToastTrigger({ message: "Toast deleted successfully" });
     } catch (err: any) {
-      setToast({ text: handleAxiosError(err), tone: "error" });
-    } finally {
-      setTimeout(() => setToast(null), 1800);
+      ToastTrigger({ message: err, tone: "error" });
     }
   };
 
   return (
     <div>
-      <h4 className="text-sm font-semibold cursor-default text-gray-900 mb-3">Flags</h4>
+      <h4 className="text-sm font-semibold cursor-default text-gray-900 mb-3">
+        Flags
+      </h4>
       {loading ? (
         <div className="text-sm text-gray-600">Loading flags...</div>
       ) : flags.length === 0 ? (
@@ -377,7 +386,9 @@ function FlagsSection({ projectId }: { projectId: string }) {
         onSubmit={addFlag}
         className="border-t border-gray-100 pt-4 space-y-2"
       >
-        <h5 className="text-sm font-semibold cursor-default text-gray-900">Create new flag</h5>
+        <h5 className="text-sm font-semibold cursor-default text-gray-900">
+          Create new flag
+        </h5>
         <div className="grid grid-cols-2 gap-2">
           <input
             className="border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-400 px-3 py-2 bg-white/80"
@@ -424,18 +435,15 @@ function FlagsSection({ projectId }: { projectId: string }) {
         </label>
         <button
           type="submit"
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-400 font-semibold hover:bg-blue-700"
+          className="bg-blue-600 text-white px-4 py-2 mt-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-400 font-semibold hover:bg-blue-700"
         >
           Add Flag
         </button>
       </form>
-
-      {toast && <Toast text={toast.text} tone={toast.tone} />}
     </div>
   );
 }
 
-// ------- Project settings inside modal -------
 function ProjectSettings({
   project,
   onUpdated,
@@ -448,7 +456,7 @@ function ProjectSettings({
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description ?? "");
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<{
+  const [toastInfo, setToast] = useState<{
     text: string;
     tone?: "success" | "error";
   } | null>(null);
@@ -457,13 +465,14 @@ function ProjectSettings({
     e.preventDefault();
     setSaving(true);
     try {
-      // Adjust endpoint if your API differs
-      const res = await api.patch(`/projects/updateProject/${project._id}`, {
+      const res = await api.put(`/projects/updateProject`, {
+        projectId: project._id,
         name,
         description,
       });
+      console.log("Response1", res);
       onUpdated(res.data.data);
-      setToast({ text: "Project updated" });
+      ToastTrigger({ message: "Project updated" });
     } catch (err: any) {
       setToast({ text: handleAxiosError(err), tone: "error" });
     } finally {
@@ -520,14 +529,11 @@ function ProjectSettings({
         </div>
       </form>
 
-      <div className="border-t border-blue-100 pt-4"></div>
-
-      {toast && <Toast text={toast.text} tone={toast.tone} />}
+      <div className="border-t border-gray-100 pt-4"></div>
     </div>
   );
 }
 
-// ------- Project Drawer (Modal with tabs) -------
 function ProjectDrawer({
   project,
   open,
@@ -595,7 +601,6 @@ function ProjectDrawer({
   );
 }
 
-// ------- Main Dashboard Page -------
 export default function DashboardPage() {
   const { user, loading } = useUser();
   const router = useRouter();
@@ -603,12 +608,11 @@ export default function DashboardPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [pageLoading, setPageLoading] = useState(true);
-  const [toast, setToast] = useState<{
+  const [toastInfo, setToast] = useState<{
     text: string;
     tone?: "success" | "error";
   } | null>(null);
 
-  // redirect if unauthenticated
   useEffect(() => {
     if (!loading && !user) router.push("/auth/login");
   }, [user, loading, router]);
@@ -643,6 +647,18 @@ export default function DashboardPage() {
   const onProjectDeleted = (id: string) =>
     setProjects((prev) => prev.filter((x) => x._id !== id));
 
+  const handleLogout = async () => {
+    try {
+      const res = await api.post(`/users/logout`, {});
+      if (res.status === 200) {
+        toast.success("Logout successful");
+        router.push("/");
+      }
+    } catch (e) {
+      toast.error("Error while logging out");
+    }
+  };
+
   if (loading || (!user && !loading)) {
     return <div className="p-8 text-center">Loading...</div>;
   }
@@ -659,7 +675,6 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-gray-100 p-6">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
@@ -669,32 +684,34 @@ export default function DashboardPage() {
               Manage your projects and feature flags in one place.
             </p>
           </div>
-          {user?.api_key && (
-            <div className="flex items-center gap-2 text-xs text-gray-800 bg-white/50 border border-gray-200 shadow-xs rounded-lg px-3 py-2 font-mono">
-              <span>API Key: {user.api_key}</span>
-              <button
-                type="button"
-                title="Copy API Key"
-                className="ml-1 p-1 rounded hover:bg-gray-200 cursor-pointer transition"
-                onClick={() => {
-                  navigator.clipboard.writeText(user.api_key);
-                  Toast({ text: "API key copied to clipboard" });
-                }}
-              >
-                <CopyIcon />
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {user?.api_key && (
+              <div className="flex items-center gap-2 text-xs text-gray-800 bg-white/50 border border-gray-200 shadow-xs rounded-lg px-3 py-2 font-mono">
+                <span>API Key: {user.api_key}</span>
+                <button
+                  type="button"
+                  title="Copy API Key"
+                  className="ml-1 p-1 rounded hover:bg-gray-200 cursor-pointer transition"
+                  onClick={() => {
+                    navigator.clipboard.writeText(user.api_key);
+                    ToastTrigger({ message: "API key copied to clipboard" });
+                  }}
+                >
+                  <CopyIcon />
+                </button>
+              </div>
+            )}
+            <button className="cursor-pointer" onClick={handleLogout}>
+              <LogOut />
+            </button>
+          </div>
         </div>
 
-        {/* Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: Create project */}
           <div className="lg:col-span-1">
             <CreateProjectPanel onCreated={onProjectCreated} />
           </div>
 
-          {/* Right: Projects grid */}
           <div className="lg:col-span-2">
             <div className="bg-white/70 backdrop-blur-md border border-gray-200 rounded-2xl shadow-xl p-4">
               <div className="flex items-center justify-between mb-3">
@@ -710,9 +727,9 @@ export default function DashboardPage() {
               </div>
 
               {pageLoading ? (
-                <div className="text-blue-700 text-sm">Loading projects...</div>
+                <div className="text-gray-700 text-sm">Loading projects...</div>
               ) : projects.length === 0 ? (
-                <div className="text-blue-700 text-sm">
+                <div className="text-gray-700 text-sm">
                   No projects yet. Create your first project on the left.
                 </div>
               ) : (
@@ -731,7 +748,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Drawer */}
       <ProjectDrawer
         project={activeProject}
         open={drawerOpen}
@@ -739,8 +755,6 @@ export default function DashboardPage() {
         onProjectUpdated={onProjectUpdated}
         onProjectDeleted={onProjectDeleted}
       />
-
-      {toast && <Toast text={toast.text} tone={toast.tone} />}
 
       <style jsx global>{`
         .animate-gradient {
@@ -795,16 +809,16 @@ function EditFlagModal({
     e.preventDefault();
     setSaving(true);
     try {
-      // send only what the controller expects
       const payload: any = {
         flagId: flag._id,
-        name,
-        description,
-        environment,
+        name: name,
+        description: description,
+        environment: environment,
         isEnabled: enabled.toString(),
       };
-      const res = await api.patch("/flags/updateFlag", payload);
-      onSaved(res.data.data); // updated flag from server
+      console.log(payload);
+      const res = await api.put("/flags/updateFlag", payload);
+      onSaved(res.data.data);
       toast.success("Flag updated");
       onClose();
     } catch (err: any) {
