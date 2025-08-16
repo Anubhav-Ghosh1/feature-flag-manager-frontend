@@ -4,6 +4,7 @@ import Button from "../../../components/Buttons/Button";
 import axios from "axios";
 import "../../Utils/animate-gradient.css";
 import { API_BASE_URL } from "../../../components/CommonUtils/api";
+import { useRouter } from "next/navigation";
 
 const Signup = () => {
   const [username, setUsername] = useState("");
@@ -12,6 +13,7 @@ const Signup = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,7 +25,7 @@ const Signup = () => {
     setLoading(true);
     try {
       const res = await axios.post(
-        `${API_BASE_URL}/api/v1/users/signup`,
+        `${API_BASE_URL}/users/signup`,
         { username, email, password },
         { withCredentials: true }
       );

@@ -1,15 +1,20 @@
 "use client";
-import React, { useState } from "react";
+import React, { use, useState } from "react";
 import Button from "../../../components/Buttons/Button";
 import axios from "axios";
 import "../../Utils/animate-gradient.css";
 import { API_BASE_URL } from "../../../components/CommonUtils/api";
+import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
+import { useContextStore } from "@/context/Store";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  const { user, setField } = useContextStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,11 +22,22 @@ const Login = () => {
     setError("");
     try {
       const res = await axios.post(
-        `${API_BASE_URL}/api/v1/users/login`,
-        { email, password },
-        { withCredentials: true }
+        `${API_BASE_URL}/users/login`,
+        {
+          email,
+          password,
+        },
+        {
+          withCredentials: true,
+        }
       );
-      // TODO: handle login success (e.g., redirect, set user context)
+      console.log(res.data.statusCode);
+      if (res.data.statusCode !== 200) {
+        toast.error(res.data.message);
+      }
+      router.push("/dashboard")
+      toast.success("Login successful!");
+      setField("user", res.data.data);
       setLoading(false);
     } catch (err: any) {
       setError(err?.response?.data?.message || "Login failed");
