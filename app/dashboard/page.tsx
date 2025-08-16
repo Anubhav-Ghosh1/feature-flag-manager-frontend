@@ -43,21 +43,12 @@ const formatDate = (d?: string) => {
   return isNaN(date.getTime()) ? "" : date.toLocaleString();
 };
 
-function ToastTrigger({
-  message,
-  tone = "success",
-  onDone,
-}: {
-  message?: string;
-  tone?: "success" | "error";
-  onDone?: () => void;
-}) {
-  React.useEffect(() => {
-    if (!message) return;
-    (tone === "error" ? toast.error : toast.success)(message);
-    onDone?.();
-  }, [message, tone, onDone]);
-  return null;
+function ToastTrigger(message: string, tone = "success") {
+  if (tone === "success") {
+    toast.success(message);
+  } else {
+    toast.error(message);
+  }
 }
 
 // ------- Modal (headless) -------
@@ -116,9 +107,9 @@ function CreateProjectPanel({
       onCreated(res.data.data);
       setName("");
       setDescription("");
-      ToastTrigger({ message: "Project Created Successfully" });
+      ToastTrigger("Project Created Successfully");
     } catch (err: any) {
-      ToastTrigger({ message: "Error while creating project", tone: "error" });
+      ToastTrigger("Error while creating project", "error");
     } finally {
       setLoading(false);
       setTimeout(() => setToast(null), 2000);
@@ -255,9 +246,9 @@ function FlagsSection({ projectId }: { projectId: string }) {
       setDescription("");
       setEnvironment("development");
       setEnabled(true);
-      ToastTrigger({ message: "Flag created successfully" });
+      ToastTrigger("Flag created successfully");
     } catch (err: any) {
-      ToastTrigger({ message: err, tone: "error" });
+      ToastTrigger(err, "error");
     }
   };
 
@@ -280,7 +271,7 @@ function FlagsSection({ projectId }: { projectId: string }) {
         prev.map((f) => (f._id === flag._id ? { ...f, isEnabled: newVal } : f))
       );
     } catch (err: any) {
-      ToastTrigger({ message: "Error while toggling flag state" });
+      ToastTrigger("Error while toggling flag state");
     }
   };
 
@@ -289,9 +280,9 @@ function FlagsSection({ projectId }: { projectId: string }) {
     try {
       await api.delete(`/flags/deleteFlag/${flag._id}`);
       setFlags((prev) => prev.filter((f) => f._id !== flag._id));
-      ToastTrigger({ message: "Toast deleted successfully" });
+      ToastTrigger("Toast deleted successfully");
     } catch (err: any) {
-      ToastTrigger({ message: err, tone: "error" });
+      ToastTrigger(err, "error");
     }
   };
 
@@ -472,7 +463,7 @@ function ProjectSettings({
       });
       console.log("Response1", res);
       onUpdated(res.data.data);
-      ToastTrigger({ message: "Project updated" });
+      ToastTrigger("Project updated");
     } catch (err: any) {
       setToast({ text: handleAxiosError(err), tone: "error" });
     } finally {
@@ -666,11 +657,7 @@ export default function DashboardPage() {
   const capitalize = (s: string) =>
     s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
 
-  let userName = user?.fullName
-    ? `, ${capitalize(user.fullName)}`
-    : user?.username
-    ? `, ${capitalize(user.username)}`
-    : "";
+  let userName = `, ${user?.email.split("@")[0]}` || ", User";
 
   return (
     <div className="min-h-screen bg-gray-100 p-6">
@@ -694,7 +681,7 @@ export default function DashboardPage() {
                   className="ml-1 p-1 rounded hover:bg-gray-200 cursor-pointer transition"
                   onClick={() => {
                     navigator.clipboard.writeText(user.api_key);
-                    ToastTrigger({ message: "API key copied to clipboard" });
+                    ToastTrigger("API key copied to clipboard");
                   }}
                 >
                   <CopyIcon />
