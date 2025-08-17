@@ -4,7 +4,7 @@ import NavbarContainer from "./Navbar/NavbarContainer";
 export default function HomePage() {
   return (
     <div>
-      <NavbarContainer />
+      {/* <NavbarContainer /> */}
       <HeroSection />
     </div>
   );
